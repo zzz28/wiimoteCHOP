@@ -75,10 +75,12 @@ WiimoteCHOP::WiimoteCHOP(const OP_NodeInfo* info) : myNodeInfo(info)
 	myOffset = 0.0;
 	myWiimote = new WiimoteConnector();
 	lastWiimoteToggle = false;
-	lastAccelerometerToggle = false;
-	lastGyroscopeToggle = false;
-	lastIrToggle = false;
-	lastRumble = false;
+	for (int i = 0; i < 2; ++i) {
+		lastAccelerometerToggle[i] = false;
+		lastGyroscopeToggle[i] = false;
+		lastIrToggle[i] = false;
+		lastRumble[i] = false;
+	}
 	totalChannels = 0;
 	isWiimoteOn = false;
 
@@ -132,80 +134,88 @@ WiimoteCHOP::getOutputInfo(CHOP_OutputInfo* info, const OP_Inputs* inputs, void*
 void
 WiimoteCHOP::getChannelName(int32_t index, OP_String *name, const OP_Inputs* inputs, void* reserved1)
 {
-	std::string chanName = "chan" + std::to_string(index);
-	if (index == 0) {
+	std::string chanName = "chan" + std::to_string(index); // Default name
+	std::string prefix = "w1_";
+	int channel_index_in_wiimote = index;
+
+	if (index >= 35) { // Channels for the second Wiimote (index 35-69)
+		prefix = "w2_";
+		channel_index_in_wiimote = index - 35;
+	}
+
+	// Original channel naming logic based on channel_index_in_wiimote
+	if (channel_index_in_wiimote == 0) {
 		chanName = "A";
-	} else if (index == 1) {
+	} else if (channel_index_in_wiimote == 1) {
 		chanName = "B";
-	} else if (index == 2) {
+	} else if (channel_index_in_wiimote == 2) {
 		chanName = "Down";
-	} else if (index == 3) {
+	} else if (channel_index_in_wiimote == 3) {
 		chanName = "Up";
-	} else if (index == 4) {
+	} else if (channel_index_in_wiimote == 4) {
 		chanName = "Left";
-	} else if (index == 5) {
+	} else if (channel_index_in_wiimote == 5) {
 		chanName = "Right";
-	} else if (index == 6) {
+	} else if (channel_index_in_wiimote == 6) {
 		chanName = "Minus";
-	} else if (index == 7) {
+	} else if (channel_index_in_wiimote == 7) {
 		chanName = "Plus";
-	} else if (index == 8) {
+	} else if (channel_index_in_wiimote == 8) {
 		chanName = "One";
-	} else if (index == 9) {
+	} else if (channel_index_in_wiimote == 9) {
 		chanName = "Two";
-	} else if (index == 10) {
+	} else if (channel_index_in_wiimote == 10) {
 		chanName = "Home";
-	} else if (index == 11) {
+	} else if (channel_index_in_wiimote == 11) {
 		chanName = "Roll";
-	} else if (index == 12) {
+	} else if (channel_index_in_wiimote == 12) {
 		chanName = "Pitch";
-	} else if (index == 13) {
+	} else if (channel_index_in_wiimote == 13) {
 		chanName = "Yaw";
-	}  else if (index == 14) {
+	}  else if (channel_index_in_wiimote == 14) {
 		chanName = "IrDot1_X";
-	}  else if (index == 15) {
+	}  else if (channel_index_in_wiimote == 15) {
 		chanName = "IrDot1_Y";
-	}  else if (index == 16) {
+	}  else if (channel_index_in_wiimote == 16) {
 		chanName = "IrDot2_X";
-	}  else if (index == 17) {
+	}  else if (channel_index_in_wiimote == 17) {
 		chanName = "IrDot2_Y";
-	}  else if (index == 18) {
+	}  else if (channel_index_in_wiimote == 18) {
 		chanName = "IrDot3_X";
-	}  else if (index == 19) {
+	}  else if (channel_index_in_wiimote == 19) {
 		chanName = "IrDot3_Y";
-	}  else if (index == 20) {
+	}  else if (channel_index_in_wiimote == 20) {
 		chanName = "IrDot4_X";
-	}  else if (index == 21) {
+	}  else if (channel_index_in_wiimote == 21) {
 		chanName = "IrDot4_Y";
-	}  else if (index == 22) {
+	}  else if (channel_index_in_wiimote == 22) {
 		chanName = "IrCursor_X";
-	}  else if (index == 23) {
+	}  else if (channel_index_in_wiimote == 23) {
 		chanName = "IrCursor_Y";
-	}  else if (index == 24) {
+	}  else if (channel_index_in_wiimote == 24) {
 		chanName = "IrCursor_Z";
-	}  else if (index == 25) {
+	}  else if (channel_index_in_wiimote == 25) {
 		chanName = "Nunchuck_C";
-	}  else if (index == 26) {
+	}  else if (channel_index_in_wiimote == 26) {
 		chanName = "Nunchuck_Z";
-	}  else if (index == 27) {
+	}  else if (channel_index_in_wiimote == 27) {
 		chanName = "Nunchuck_Roll";
-	} else if (index == 28) {
+	} else if (channel_index_in_wiimote == 28) {
 		chanName = "Nunchuck_Pitch";
-	} else if (index == 29) {
+	} else if (channel_index_in_wiimote == 29) {
 		chanName = "Nunchuck_Yaw";
-	} else if (index == 30) {
+	} else if (channel_index_in_wiimote == 30) {
 		chanName = "Nunchuck_Joystick_X";
-	} else if (index == 31) {
+	} else if (channel_index_in_wiimote == 31) {
 		chanName = "Nunchuck_Joystick_Y";
-	} else if (index == 32) {
+	} else if (channel_index_in_wiimote == 32) {
 		chanName = "Gyro_Pitch";
-	} else if (index == 33) {
+	} else if (channel_index_in_wiimote == 33) {
 		chanName = "Gyro_Roll";
-	} else if (index == 34) {
+	} else if (channel_index_in_wiimote == 34) {
 		chanName = "Gyro_Yaw";
 	} 
-
-	name->setString(chanName.c_str());
+	name->setString((prefix + chanName).c_str());
 }
 
 void
@@ -217,135 +227,185 @@ WiimoteCHOP::execute(CHOP_Output* output,
 	myWiimote->update();
 	
 	//double	 scale = inputs->getParDouble("Scale");
-	isWiimoteOn = inputs->getParInt("Wiimote");
-	bool isAccelerometerOn = inputs->getParInt("Accelerometer");
-	bool isGyroscopeOn = inputs->getParInt("Gyroscope");
-	bool isIrOn = inputs->getParInt("Ir");
-	bool isRumble = inputs->getParInt("Rumble");
+	isWiimoteOn = inputs->getParInt("Wiimote"); // This is the master toggle for the connection
+	bool isAccelerometerParamOn = inputs->getParInt("Accelerometer");
+	bool isGyroscopeParamOn = inputs->getParInt("Gyroscope");
+	bool isIrParamOn = inputs->getParInt("Ir");
+	bool isRumbleParamOn = inputs->getParInt("Rumble"); // This parameter controls rumble for both
 
-	totalChannels = output->numChannels;
-	if(!lastWiimoteToggle && isWiimoteOn) //If the last status of the toggle was off and now it is on, attempt connection
+	totalChannels = output->numChannels; // Should be 70 if getOutputInfo is correct
+
+	// Connection logic (global for the WiimoteConnector instance)
+	if(!lastWiimoteToggle && isWiimoteOn) 
 	{
 		myWiimote->connect();	
-
 	}
 	else if (lastWiimoteToggle && !isWiimoteOn) {
 		myWiimote->disconnect();
 	}
-
-
 	lastWiimoteToggle = isWiimoteOn;
 
-	if (!lastAccelerometerToggle && isAccelerometerOn) {
-		myWiimote->acelerometer(true);
-	}
-	else if (lastAccelerometerToggle && !isAccelerometerOn) {
-		myWiimote->acelerometer(false);
-	}
-
-	lastAccelerometerToggle = isAccelerometerOn;
-
-	if (!lastGyroscopeToggle && isGyroscopeOn) {
-		myWiimote->gyroscope(true);
-	}
-	else if (lastGyroscopeToggle && !isGyroscopeOn) {
-		myWiimote->gyroscope(false);
-	}
-
-	lastGyroscopeToggle = isGyroscopeOn;
-
-	
-	if (!lastIrToggle && isIrOn) {
-		myWiimote->irTracking(true);
-	}
-	else if (lastIrToggle && !isIrOn) {
-		myWiimote->irTracking(false);
-	}
-
-	lastIrToggle = isIrOn;
-	
-
-	if (!lastRumble && isRumble) {
-		myWiimote->wiiRumble(true);
-	}
-	else if (lastRumble && !isRumble) {
-		myWiimote->wiiRumble(false);
-	}
-
-	lastRumble = isRumble;
-
-
-	
-
-
-	if (isWiimoteOn) {
-
-		float outData[NUM_CHANNELS];
-
-		//outData[3] = (float) myWiimote->wiimoteButton_A();
-
-
-
-		int totalButtons = 10;
-		// Get button state
-		for (int i = 0; i < 11; i++)
-		{
-			outData[i] = (float)myWiimote->wiimoteButtons()[i];
-		}
-
-		// Accelerometer
-		outData[totalButtons+1] = 0;
-		outData[totalButtons+2] = 0;
-		outData[totalButtons+3] = 0;
-
-		if (isAccelerometerOn) {
-			orient_t wiimoteOrientation = myWiimote->getWiimoteOrient();
-			outData[totalButtons + 1] = wiimoteOrientation.roll;
-			outData[totalButtons + 2] = wiimoteOrientation.pitch;
-			outData[totalButtons + 3] = wiimoteOrientation.yaw;	// only if IR tracking
-		}
-
-		for (int i = 0; i < 11; i++)
-		{
-			outData[(totalButtons+4)+i] = myWiimote->wiimoteIr()[i];
-		}
-
-
-		if (myWiimote->nunchuckOn()) {
-			outData[totalButtons + 15] = (float)myWiimote->nunchuckButtons()[0];
-			outData[totalButtons + 16] = (float)myWiimote->nunchuckButtons()[1];
-
-			orient_t nunChuckOrientation = myWiimote->nunchuckAcc();
-			outData[totalButtons + 17] = nunChuckOrientation.a_roll;
-			outData[totalButtons + 18] = nunChuckOrientation.a_pitch;
-			outData[totalButtons + 19] = nunChuckOrientation.yaw;
-
-			outData[totalButtons + 20] = myWiimote->nunchuckJoystick()[0];
-			outData[totalButtons + 21] = myWiimote->nunchuckJoystick()[1];
-
-			vector<float> gyroOrientation = myWiimote->getWiimoteGyro();
-			outData[totalButtons + 22] = gyroOrientation[0];
-			outData[totalButtons + 23] = gyroOrientation[1];
-			outData[totalButtons + 24] = gyroOrientation[2];
-		
-		}
-		else {
-			for (int i = totalButtons + 15; i < totalButtons + 25; i++)
-			{
-				outData[i] = 0;
+	// Per-Wiimote toggles for features if master Wiimote toggle is on
+	if (isWiimoteOn) { // Or use myWiimote->isConnected() if that's more reliable for overall state
+		for (int wii_idx = 0; wii_idx < 2; ++wii_idx) {
+			// Assuming WiimoteConnector methods internally check if _wiimotes[wii_idx] is valid and connected.
+			// Accelerometer
+			if (!lastAccelerometerToggle[wii_idx] && isAccelerometerParamOn) {
+				myWiimote->acelerometer(wii_idx, true);
+			} else if (lastAccelerometerToggle[wii_idx] && !isAccelerometerParamOn) {
+				myWiimote->acelerometer(wii_idx, false);
 			}
+			lastAccelerometerToggle[wii_idx] = isAccelerometerParamOn;
+
+			// Gyroscope
+			if (!lastGyroscopeToggle[wii_idx] && isGyroscopeParamOn) {
+				myWiimote->gyroscope(wii_idx, true);
+			} else if (lastGyroscopeToggle[wii_idx] && !isGyroscopeParamOn) {
+				myWiimote->gyroscope(wii_idx, false);
+			}
+			lastGyroscopeToggle[wii_idx] = isGyroscopeParamOn;
+
+			// IR
+			if (!lastIrToggle[wii_idx] && isIrParamOn) {
+				myWiimote->irTracking(wii_idx, true);
+			} else if (lastIrToggle[wii_idx] && !isIrParamOn) {
+				myWiimote->irTracking(wii_idx, false);
+			}
+			lastIrToggle[wii_idx] = isIrParamOn;
+			
+			// Rumble - The parameter is a toggle. If on, rumble this Wiimote.
+			// This means myWiimote->wiiRumble will be called every frame if isRumbleParamOn is true.
+			// This might not be the desired behavior if rumble is meant to be a pulse.
+			// However, the original code was if(!lastRumble && isRumble) { myWiimote->wiiRumble(true); }
+			// which implies a state change triggers rumble once.
+			// Let's refine to apply rumble if the param is on.
+			// The WiimoteConnector's wiiRumble is likely expecting a bool/int for on/off state.
+			myWiimote->wiiRumble(wii_idx, isRumbleParamOn ? 1 : 0); 
+			// No need for lastRumble array if it's a direct command like this.
+			// Reinstating lastRumble logic for consistency with other toggles,
+			// assuming wiiRumble(idx, true) starts it and wiiRumble(idx, false) stops it.
+			if (!lastRumble[wii_idx] && isRumbleParamOn) {
+				myWiimote->wiiRumble(wii_idx, 1); // Start rumble
+			} else if (lastRumble[wii_idx] && !isRumbleParamOn) {
+				myWiimote->wiiRumble(wii_idx, 0); // Stop rumble
+			}
+			lastRumble[wii_idx] = isRumbleParamOn;
 		}
+	} else { // If master Wiimote toggle is OFF, ensure all features are signalled off for all Wiimotes
+        for (int wii_idx = 0; wii_idx < 2; ++wii_idx) {
+            if (lastAccelerometerToggle[wii_idx]) {
+                myWiimote->acelerometer(wii_idx, false);
+                lastAccelerometerToggle[wii_idx] = false;
+            }
+            if (lastGyroscopeToggle[wii_idx]) {
+                myWiimote->gyroscope(wii_idx, false);
+                lastGyroscopeToggle[wii_idx] = false;
+            }
+            if (lastIrToggle[wii_idx]) {
+                myWiimote->irTracking(wii_idx, false);
+                lastIrToggle[wii_idx] = false;
+            }
+            if (lastRumble[wii_idx]) { // If rumble was on
+                myWiimote->wiiRumble(wii_idx, 0); // Stop rumble
+                lastRumble[wii_idx] = false;
+            }
+        }
+    }
+
+
+	if (isWiimoteOn && myWiimote->isConnected()) { // Check overall connection
+		float outData[NUM_CHANNELS]; // NUM_CHANNELS is 70
+
+		for (int wii_idx = 0; wii_idx < 2; ++wii_idx) {
+			int data_offset = wii_idx * 35;
+			const int base_num_buttons = 11; // A,B,D,U,L,R,MINUS,PLUS,ONE,TWO,HOME
+			const int base_num_orient = 3;   // Roll, Pitch, Yaw
+			const int base_num_ir_dots = 8;  // 4 dots * (X,Y)
+			const int base_num_ir_cursor = 3;// Cursor X,Y,Z
+			const int base_num_nunchuk_buttons = 2; // C, Z
+			const int base_num_nunchuk_orient = 3;  // N-Roll, N-Pitch, N-Yaw
+			const int base_num_nunchuk_joy = 2;   // N-JoyX, N-JoyY
+			const int base_num_gyro = 3;        // Gyro-Pitch, Gyro-Roll, Gyro-Yaw
+                                            // Total: 11+3+8+3+2+3+2+3 = 35
+
+			// Get button state
+			vector<int> buttons = myWiimote->wiimoteButtons(wii_idx);
+			for (int i = 0; i < base_num_buttons; i++) {
+				outData[data_offset + i] = static_cast<float>(buttons[i]);
+			}
+
+			// Accelerometer (Orientation)
+			outData[data_offset + base_num_buttons + 0] = 0; // Roll
+			outData[data_offset + base_num_buttons + 1] = 0; // Pitch
+			outData[data_offset + base_num_buttons + 2] = 0; // Yaw
+			if (isAccelerometerParamOn) { // Use the parameter that controls this feature
+				orient_t wiimoteOrientation = myWiimote->getWiimoteOrient(wii_idx);
+				outData[data_offset + base_num_buttons + 0] = wiimoteOrientation.roll;
+				outData[data_offset + base_num_buttons + 1] = wiimoteOrientation.pitch;
+				outData[data_offset + base_num_buttons + 2] = wiimoteOrientation.yaw;
+			}
+
+			// IR Data
+			// IrDot1_X to IrDot4_Y (8 channels) + IrCursor_X,Y,Z (3 channels) = 11 channels
+			// Original code had myWiimote->wiimoteIr() returning 11 floats.
+			// Indices: 0-1:Dot1, 2-3:Dot2, 4-5:Dot3, 6-7:Dot4, 8:CursorX, 9:CursorY, 10:CursorZ
+			int ir_offset = data_offset + base_num_buttons + base_num_orient;
+			vector<float> irData = myWiimote->wiimoteIr(wii_idx); // Returns vector of 11 floats
+			for (int i = 0; i < (base_num_ir_dots + base_num_ir_cursor); i++) { // 8+3 = 11
+				outData[ir_offset + i] = irData[i];
+			}
+			
+			// Nunchuck Data
+			int nunchuk_offset = ir_offset + base_num_ir_dots + base_num_ir_cursor;
+			if (myWiimote->nunchuckOn(wii_idx)) {
+				vector<int> nunButtons = myWiimote->nunchuckButtons(wii_idx);
+				outData[nunchuk_offset + 0] = static_cast<float>(nunButtons[0]); // C
+				outData[nunchuk_offset + 1] = static_cast<float>(nunButtons[1]); // Z
+
+				orient_t nunChuckOrientation = myWiimote->nunchuckAcc(wii_idx);
+				outData[nunchuk_offset + base_num_nunchuk_buttons + 0] = nunChuckOrientation.roll; // N-Roll (using a_roll from original)
+				outData[nunchuk_offset + base_num_nunchuk_buttons + 1] = nunChuckOrientation.pitch; // N-Pitch (using a_pitch from original)
+				outData[nunchuk_offset + base_num_nunchuk_buttons + 2] = nunChuckOrientation.yaw;   // N-Yaw
+
+				vector<float> nunJoy = myWiimote->nunchuckJoystick(wii_idx);
+				outData[nunchuk_offset + base_num_nunchuk_buttons + base_num_nunchuk_orient + 0] = nunJoy[0]; // N-JoyX
+				outData[nunchuk_offset + base_num_nunchuk_buttons + base_num_nunchuk_orient + 1] = nunJoy[1]; // N-JoyY
+			} else {
+				for (int i = 0; i < (base_num_nunchuk_buttons + base_num_nunchuk_orient + base_num_nunchuk_joy); ++i) {
+					outData[nunchuk_offset + i] = 0;
+				}
+			}
+
+			// Gyroscope Data (Motion+)
+			int gyro_offset = nunchuk_offset + base_num_nunchuk_buttons + base_num_nunchuk_orient + base_num_nunchuk_joy;
+			if (isGyroscopeParamOn) { // Use the parameter that controls this feature
+				vector<float> gyroOrientation = myWiimote->getWiimoteGyro(wii_idx); // Returns 3 floats
+				outData[gyro_offset + 0] = gyroOrientation[0]; // Gyro-Pitch
+				outData[gyro_offset + 1] = gyroOrientation[1]; // Gyro-Roll
+				outData[gyro_offset + 2] = gyroOrientation[2]; // Gyro-Yaw
+			} else {
+				for (int i = 0; i < base_num_gyro; ++i) {
+					outData[gyro_offset + i] = 0;
+				}
+			}
+		} // end for wii_idx
 		
-		for (int i = 0; i < output->numChannels; i++)
+		// Output all channel data
+		for (int i = 0; i < output->numChannels; i++) // output->numChannels should be 70
 		{
 			for (int j = 0; j < output->numSamples; j++)
 			{
 				output->channels[i][j] = float(outData[i]);
 			}
 		}
-	}
-
-
+	} else { // If not isWiimoteOn or not myWiimote->isConnected()
+        // Zero out all channels if not connected
+        for (int i = 0; i < output->numChannels; i++) {
+            for (int j = 0; j < output->numSamples; j++) {
+                output->channels[i][j] = 0.0f;
+            }
+        }
+    }
 }
 
 int32_t
@@ -380,10 +440,8 @@ WiimoteCHOP::getInfoCHOPChan(int32_t index,
 bool		
 WiimoteCHOP::getInfoDATSize(OP_InfoDATSize* infoSize, void* reserved1)
 {
-	infoSize->rows = 6;
+	infoSize->rows = 10; // executeCount, outputChannels, and 4 rows for each of 2 Wiimotes
 	infoSize->cols = 2;
-	// Setting this to false means we'll be assigning values to the table
-	// one row at a time. True means we'll do it one column at a time.
 	infoSize->byColumn = false;
 	return true;
 }
@@ -396,101 +454,66 @@ WiimoteCHOP::getInfoDATEntries(int32_t index,
 {
 	char tempBuffer[4096];
 
-	if (index == 0)
-	{
-		// Set the value for the first column
+	if (index == 0) {
 		entries->values[0]->setString("executeCount");
-
-		// Set the value for the second column
 #ifdef _WIN32
 		sprintf_s(tempBuffer, "%d", myExecuteCount);
-#else // macOS
+#else
         snprintf(tempBuffer, sizeof(tempBuffer), "%d", myExecuteCount);
 #endif
 		entries->values[1]->setString(tempBuffer);
-	}
-
-	if (index == 1)
-	{
-		// Set the value for the first column
+	} else if (index == 1) {
 		entries->values[0]->setString("outputChannels");
-
-		// Set the value for the second column
 #ifdef _WIN32
-        sprintf_s(tempBuffer, "%g", (float)totalChannels);
-#else // macOS
-        snprintf(tempBuffer, sizeof(tempBuffer), "%g", myOffset);
+        sprintf_s(tempBuffer, "%d", totalChannels); // totalChannels should be 70
+#else
+        snprintf(tempBuffer, sizeof(tempBuffer), "%d", totalChannels);
 #endif
-		entries->values[1]->setString( tempBuffer);
-	}
-
-	if (index == 2)
-	{
-		// Set the value for the first column
-		entries->values[0]->setString("Wiimote Status");
-
-		// Set the value for the second column
+		entries->values[1]->setString(tempBuffer);
+	} 
+	// Wiimote 1 Info (indices 2, 3, 4, 5)
+	else if (index == 2) {
+		entries->values[0]->setString("W1_Status");
+		// Assuming getWiimoteID returns "none" if not connected, or the ID string
+		std::string w1_id = myWiimote->getWiimoteID(0);
+		entries->values[1]->setString( (w1_id != "none" && myWiimote->isConnected()) ? "Connected" : "Disconnected");
+	} else if (index == 3) {
+		entries->values[0]->setString("W1_Nunchuck");
+		entries->values[1]->setString(myWiimote->getNunchuckStatus(0).c_str());
+	} else if (index == 4) {
+		entries->values[0]->setString("W1_Battery");
+		float battery_w1 = myWiimote->wiiBattery(0);
 #ifdef _WIN32
-
-		std::string currentStatus = myWiimote->getCurrentStatus();
-#else // macOS
-		snprintf(tempBuffer, sizeof(tempBuffer), "%g", myOffset);
+		sprintf_s(tempBuffer, "%.0f%%", battery_w1 * 100.0f);
+#else
+        snprintf(tempBuffer, sizeof(tempBuffer), "%.0f%%", battery_w1 * 100.0f);
 #endif
-		entries->values[1]->setString(currentStatus.c_str());
+		entries->values[1]->setString(tempBuffer);
+	} else if (index == 5) {
+		entries->values[0]->setString("W1_ID");
+		entries->values[1]->setString(myWiimote->getWiimoteID(0).c_str());
 	}
-
-	if (index == 3)
-	{
-		// Set the value for the first column
-		entries->values[0]->setString("Nunchuck Status");
-
-		// Set the value for the second column
+	// Wiimote 2 Info (indices 6, 7, 8, 9)
+	else if (index == 6) {
+		entries->values[0]->setString("W2_Status");
+		std::string w2_id = myWiimote->getWiimoteID(1);
+		entries->values[1]->setString( (w2_id != "none" && myWiimote->isConnected()) ? "Connected" : "Disconnected");
+	} else if (index == 7) {
+		entries->values[0]->setString("W2_Nunchuck");
+		entries->values[1]->setString(myWiimote->getNunchuckStatus(1).c_str());
+	} else if (index == 8) {
+		entries->values[0]->setString("W2_Battery");
+		float battery_w2 = myWiimote->wiiBattery(1);
 #ifdef _WIN32
-		// sprintf_s(tempBuffer, "%g", myOffset);
-		std::string currentStatus = myWiimote->getNunchuckStatus();
-#else // macOS
-		snprintf(tempBuffer, sizeof(tempBuffer), "%g", myOffset);
+		sprintf_s(tempBuffer, "%.0f%%", battery_w2 * 100.0f);
+#else
+        snprintf(tempBuffer, sizeof(tempBuffer), "%.0f%%", battery_w2 * 100.0f);
 #endif
-		entries->values[1]->setString(currentStatus.c_str());
+		entries->values[1]->setString(tempBuffer);
+	} else if (index == 9) {
+		entries->values[0]->setString("W2_ID");
+		entries->values[1]->setString(myWiimote->getWiimoteID(1).c_str());
 	}
-
-
-	// Battery Level
-	if (index == 4)
-	{
-		// Set the value for the first column
-		entries->values[0]->setString("battery level");
-
-		// Set the value for the second column
-#ifdef _WIN32
-		sprintf_s(tempBuffer, "%g", (myWiimote->wiiBattery()*100));
-		
-#else // macOS
-		snprintf(tempBuffer, sizeof(tempBuffer), "%g", myOffset);
-#endif
-		std::string chanValue = tempBuffer;
-		chanValue = chanValue + "%";
-
-		entries->values[1]->setString(chanValue.c_str());
-	}
-
-
-	if (index == 5)
-	{
-		// Set the value for the first column
-		entries->values[0]->setString("Wiimote Id");
-
-		// Set the value for the second column
-#ifdef _WIN32
-
-		std::string currentStatus = myWiimote->getCurrentStatus();
-#else // macOS
-		snprintf(tempBuffer, sizeof(tempBuffer), "%g", myOffset);
-#endif
-		entries->values[1]->setString(myWiimote->getCurrentWiimote().c_str());
-	}
-
-
 }
 
 void

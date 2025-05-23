@@ -139,35 +139,45 @@ void WiimoteConnector::wiiThread(int id)
 void WiimoteConnector::disconnect()
 {
 	_myStatus = "Disconnecting";
-	int found, connected;
-
-	_isConnected = false;
+	_isConnected = false; 
 	_attemptedConnection = false;
-	wiiuse_set_leds(_wiimotes[0], 0);
 
-
-	
 	if (_wiimoteThread.joinable())
 	{
-		_isConnected = false;
-		_attemptedConnection = false;
 		_wiimoteThread.join();
-		std::cout << "Thread Closed";
-		//_lidarThread.detach();
-		//_lidarThread.~thread();
-		//std::terminate();
-		wiiuse_rumble(_wiimotes[0], 1);
-		Sleep(200);
-		wiiuse_rumble(_wiimotes[0], 0);
-		
+		std::cout << "Wiimote thread closed.\n";
 	}
-	wiiuse_cleanup(_wiimotes, MAX_WIIMOTES);
-	if (!any_wiimote_connected(_wiimotes, MAX_WIIMOTES)) {
-		_myStatus = "Disconnected";
-		_nunStatus = "Disconnected";
-	}
-	handle_disconnect(_wiimotes[0]);
 
+	for (int i = 0; i < MAX_WIIMOTES; ++i) {
+		if (_wiimotes && _wiimotes[i] && WIIMOTE_IS_CONNECTED(_wiimotes[i])) {
+			std::cout << "Disconnecting Wiimote ID: " << _wiimotes[i]->unid << "\n";
+			wiiuse_set_leds(_wiimotes[i], 0); 
+			wiiuse_rumble(_wiimotes[i], 1);   
+			Sleep(100); // Shorter rumble
+			wiiuse_rumble(_wiimotes[i], 0);
+			// wiiuse_disconnect(_wiimotes[i]); // Disconnect individual Wiimote - wiiuse_cleanup handles this
+		}
+	}
+	
+	if (_wiimotes) {
+		wiiuse_cleanup(_wiimotes, MAX_WIIMOTES);
+		_wiimotes = nullptr; 
+	}
+	
+	// Re-evaluate _isConnected after attempting to disconnect all.
+	// any_wiimote_connected will also update _isConnected.
+	// For now, explicitly set based on whether cleanup implies disconnection.
+	// The robust check would be to call any_wiimote_connected IF _wiimotes was not nullified,
+	// but since we nullify it, we assume all are disconnected.
+	_isConnected = false; 
+
+
+	if (!_isConnected) { // Should always be true if cleanup was successful
+		_myStatus = "Disconnected";
+		_nunStatus = "Disconnected"; 
+	}
+	// handle_disconnect is called by wiiuse_poll, so not explicitly needed here for each Wiimote
+	// unless you want specific logging outside the poll loop.
 }
 
 void WiimoteConnector::connect()
@@ -175,61 +185,53 @@ void WiimoteConnector::connect()
 	_myStatus = "Connecting";
 	int found, connected;
 
-	/*
-	 *	Initialize an array of wiimote objects.
-	 *
-	 *	The parameter is the number of wiimotes I want to create.
-	 */
 	_wiimotes = wiiuse_init(MAX_WIIMOTES);
-	/*
-	 *	Find wiimote devices
-	 *
-	 *	Now we need to find some wiimotes.
-	 *	Give the function the wiimote array we created, and tell it there
-	 *	are MAX_WIIMOTES wiimotes we are interested in.
-	 *
-	 *	Set the timeout to be 5 seconds.
-	 *
-	 *	This will return the number of actual wiimotes that are in discovery mode.
-	 */
+
 	found = wiiuse_find(_wiimotes, MAX_WIIMOTES, 5);
 	if (!found) {
 		_isConnected = false;
-		_attemptedConnection = true;
+		_attemptedConnection = true; // Should this be true or false? If no wiimotes found, maybe false.
 		std::cout << "No wiimotes found.\n";
+		_myStatus = "No Wiimotes Found";
+		// wiiuse_cleanup(_wiimotes, MAX_WIIMOTES); // Clean up if init but no find
+		// _wiimotes = nullptr;
 		return;
 	}
 
-	/*
-	 *	Connect to the wiimotes
-	 *
-	 *	Now that we found some wiimotes, connect to them.
-	 *	Give the function the wiimote array and the number
-	 *	of wiimote devices we found.
-	 *
-	 *	This will return the number of established connections to the found wiimotes.
-	 */
 	connected = wiiuse_connect(_wiimotes, MAX_WIIMOTES);
-	if (connected) {
-		_isConnected = true;
-		std::cout << "Connected to " << connected << "wiimotes (of " << found << "found).\n";
-
-		wiiuse_set_leds(_wiimotes[0], WIIMOTE_LED_1);
-		wiiuse_rumble(_wiimotes[0], 1);
-		Sleep(200);
-		wiiuse_rumble(_wiimotes[0], 0);
+	if (connected > 0) { // Check if at least one connected
+		_isConnected = true; 
+		std::cout << "Connected to " << connected << " wiimotes (of " << found << " found).\n";
 		_myStatus = "Connected";
-		_wiimoteThread = std::thread([this] { this->wiiThread(1); });
-		//std::thread teste(wiiThread, 1);
 
-	}
-	else {
+		for (int i = 0; i < MAX_WIIMOTES; ++i) { // Iterate up to MAX_WIIMOTES to check which ones are connected
+			if (_wiimotes[i] && WIIMOTE_IS_CONNECTED(_wiimotes[i])) { 
+				if (i == 0) {
+					wiiuse_set_leds(_wiimotes[i], WIIMOTE_LED_1);
+				} else if (i == 1) {
+					wiiuse_set_leds(_wiimotes[i], WIIMOTE_LED_2);
+				}
+				// Add more LEDs if MAX_WIIMOTES is larger
+
+				wiiuse_rumble(_wiimotes[i], 1);
+				Sleep(100); 
+				wiiuse_rumble(_wiimotes[i], 0);
+			}
+		}
+
+		if (!_wiimoteThread.joinable()) { 
+			_wiimoteThread = std::thread([this] { this->wiiThread(0); }); 
+		}
+
+	} else {
 		_isConnected = false;
-		_attemptedConnection = true;
+		_attemptedConnection = true; // Or false, as connection failed.
 		std::cout << "Failed to connect to any wiimote.\n";
+		_myStatus = "Connection Failed";
+		// wiiuse_cleanup(_wiimotes, MAX_WIIMOTES);
+		// _wiimotes = nullptr;
 		return;
 	}
-
 }
 
 std::string WiimoteConnector::getCurrentStatus()
@@ -237,57 +239,66 @@ std::string WiimoteConnector::getCurrentStatus()
 	return _myStatus;
 }
 
-std::string WiimoteConnector::getCurrentWiimote()
+std::string WiimoteConnector::getCurrentWiimote() // Reports for the first connected Wiimote
 {
-	std::string _idStatus;
-
-	if (_isConnected) {
-		struct wiimote_t* wm;
-		wm = _wiimotes[0];
-	//	_idStatus = wiiuse_status(_wiimotes[0]);
-		_idStatus = std::to_string(wm->unid);
+	std::string _idStatus = "none";
+	if (_wiimotes) { 
+		for (int i = 0; i < MAX_WIIMOTES; ++i) {
+			if (_wiimotes[i] && WIIMOTE_IS_CONNECTED(_wiimotes[i])) {
+				_idStatus = std::to_string(_wiimotes[i]->unid);
+				break; 
+			}
+		}
 	}
-	else {
-		_idStatus = "none";
+	return _idStatus;
+}
+
+// New method to get ID by index
+std::string WiimoteConnector::getWiimoteID(int wiimote_index)
+{
+	std::string _idStatus = "none";
+	if (wiimote_index >= 0 && wiimote_index < MAX_WIIMOTES && _wiimotes && _wiimotes[wiimote_index] && WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+		_idStatus = std::to_string(_wiimotes[wiimote_index]->unid);
 	}
 	return _idStatus;
 }
 
 
-std::string WiimoteConnector::getNunchuckStatus()
+std::string WiimoteConnector::getNunchuckStatus(int wiimote_index)
 {
-	return _nunStatus;
+    // Before, _nunStatus was a single member. Now we need to check the specific wiimote.
+    // This requires checking the expansion type for the given wiimote_index.
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return "Disconnected"; // Or "Invalid Index"
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        return "Connected";
+    }
+    return "Disconnected";
 }
 
 
 void WiimoteConnector::initializeWiimote()
 {
-	/*
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	wiiuse_set_motion_plus(wm, 0);
-	wiiuse_motion_sensing(wm, 0);
-	wiiuse_set_ir(wm, 0);
-	*/
+	// This function is not strictly needed for basic operation with current library features.
+	// Specific per-wiimote initialization (like motion sensing, IR) is done in dedicated methods.
+	// For MAX_WIIMOTES > 1, if there was generic init, it would need a loop or be applied per-wiimote.
 }
 
-short WiimoteConnector::any_wiimote_connected(wiimote** wm, int wiimotes) {
-    int i;
-    if (!wm) {
+short WiimoteConnector::any_wiimote_connected(wiimote** wms, int num_wiimotes) {
+    if (!wms) {
+        _isConnected = false; // Update global status
         return 0;
 	}
-
-
-	// era wm[i] && WIIMOTE_IS_CONNECTED(wm[i])
-    for (i = 0; i < wiimotes; i++) {
-		
-        if (&wm[i] && _isConnected) {
-            return 1;
+    for (int i = 0; i < num_wiimotes; i++) {
+        // Check if the pointer itself is valid and if the wiimote at that index is connected
+        if (wms[i] && WIIMOTE_IS_CONNECTED(wms[i])) {
+            _isConnected = true; // Update the global status
+            return 1; // Found at least one connected
         }
     }
-	
-
+    _isConnected = false; // Update the global status if no wiimote is connected
     return 0;
 }
 
@@ -346,232 +357,197 @@ void WiimoteConnector::handle_disconnect(wiimote* wm) {
 }
 
 
-orient_t WiimoteConnector::getWiimoteOrient() {
-
-	
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-	
-
-	if (WIIUSE_USING_ACC(wm)) {
-	//	printf("wiimote roll  = %f [%f]\n", wm->orient.roll, wm->orient.a_roll);
-	//	printf("wiimote pitch = %f [%f]\n", wm->orient.pitch, wm->orient.a_pitch);
-	//	printf("wiimote yaw   = %f\n", wm->orient.yaw);
-
-
-		//_myStatus = std::to_string(wm->orient.roll);
-	}
-
-	//return Vector3(0.0, 0.0, 0.0);
-	/*
-	if (WIIUSE_USING_ACC(wm)) {
-
-		printf("wiimote roll  = %f [%f]\n", wm->orient.roll, wm->orient.a_roll);
-		printf("wiimote pitch = %f [%f]\n", wm->orient.pitch, wm->orient.a_pitch);
-		printf("wiimote yaw   = %f\n", wm->orient.yaw);
-		float test = wm->orient.roll
-			return { wm->orient.roll, wm->orient.roll, wm->orient.roll };
-		//	return vec3(wm->orient.roll, wm->orient.roll, wm->orient.roll);
-		//return  wm->orient.roll;
-	}
-	*/
-	return wm->orient;
+orient_t WiimoteConnector::getWiimoteOrient(int wiimote_index) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        // Return a default/neutral orientation
+        return {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Or some other default
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (WIIUSE_USING_ACC(wm)) {
+        // Data is valid
+    }
+    return wm->orient;
 }
 
-void WiimoteConnector::acelerometer(bool accToggle) {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	if (accToggle) {
-		wiiuse_motion_sensing(wm, 1);
-	}
-	else {
-		wiiuse_motion_sensing(wm, 0);
-	}
+void WiimoteConnector::acelerometer(int wiimote_index, bool accToggle) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    wiiuse_motion_sensing(wm, accToggle ? 1 : 0);
 }
 
-
-void WiimoteConnector::gyroscope(bool accToggle) {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	if (accToggle) {
-		wiiuse_set_motion_plus(wm, 2);
-	}
-	else {
-		wiiuse_set_motion_plus(wm, 0);
-	}
+void WiimoteConnector::gyroscope(int wiimote_index, bool gyroToggle) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    // MOTION_PLUS_ENABLE may not be the correct macro, it's usually 1 or 2 for different modes.
+    // Assuming 1 enables it, 0 disables. Check wiiuse.h for correct usage if this is problematic.
+    // The original code used wiiuse_set_motion_plus(wm, 2) to enable, 0 to disable.
+    wiiuse_set_motion_plus(wm, gyroToggle ? 2 : 0); 
 }
 
-void WiimoteConnector::irTracking(bool irToggle) {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	if (irToggle) {
-		wiiuse_set_ir(wm, 1);
-	}
-	else {
-		wiiuse_set_ir(wm, 0);
-	}
+void WiimoteConnector::irTracking(int wiimote_index, bool irToggle) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    wiiuse_set_ir(wm, irToggle ? 1 : 0);
 }
 
-int WiimoteConnector::wiimoteButton_A() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-	if (IS_PRESSED(wm, WIIMOTE_BUTTON_A))
-		return 1;
-	else
-		return 0;
+int WiimoteConnector::wiimoteButton_A(int wiimote_index) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return 0; // Default value (not pressed)
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    return IS_PRESSED(wm, WIIMOTE_BUTTON_A) ? 1 : 0;
 }
 
-vector<int> WiimoteConnector::wiimoteButtons() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-	buttons[0] = IS_PRESSED(wm, WIIMOTE_BUTTON_A);
-	buttons[1] = IS_PRESSED(wm, WIIMOTE_BUTTON_B);
-	buttons[2] = IS_PRESSED(wm, WIIMOTE_BUTTON_DOWN);
-	buttons[3] = IS_PRESSED(wm, WIIMOTE_BUTTON_UP);
-	buttons[4] = IS_PRESSED(wm, WIIMOTE_BUTTON_LEFT);
-	buttons[5] = IS_PRESSED(wm, WIIMOTE_BUTTON_RIGHT);
-	buttons[6] = IS_PRESSED(wm, WIIMOTE_BUTTON_MINUS);
-	buttons[7] = IS_PRESSED(wm, WIIMOTE_BUTTON_PLUS);
-	buttons[8] = IS_PRESSED(wm, WIIMOTE_BUTTON_ONE);
-	buttons[9] = IS_PRESSED(wm, WIIMOTE_BUTTON_TWO);
-	buttons[10] = IS_PRESSED(wm, WIIMOTE_BUTTON_HOME);
+vector<int> WiimoteConnector::wiimoteButtons(int wiimote_index) {
+    // Ensure the member vector `buttons` is cleared or appropriately sized.
+    // For simplicity, we'll clear and fill. A more optimized approach might reuse memory.
+    buttons.assign(MAX_BUTTONS, 0); // Reset all buttons to 0
 
-
-	return buttons;
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return buttons; // Return the zeroed vector
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    buttons[0] = IS_PRESSED(wm, WIIMOTE_BUTTON_A);
+    buttons[1] = IS_PRESSED(wm, WIIMOTE_BUTTON_B);
+    buttons[2] = IS_PRESSED(wm, WIIMOTE_BUTTON_DOWN);
+    buttons[3] = IS_PRESSED(wm, WIIMOTE_BUTTON_UP);
+    buttons[4] = IS_PRESSED(wm, WIIMOTE_BUTTON_LEFT);
+    buttons[5] = IS_PRESSED(wm, WIIMOTE_BUTTON_RIGHT);
+    buttons[6] = IS_PRESSED(wm, WIIMOTE_BUTTON_MINUS);
+    buttons[7] = IS_PRESSED(wm, WIIMOTE_BUTTON_PLUS);
+    buttons[8] = IS_PRESSED(wm, WIIMOTE_BUTTON_ONE);
+    buttons[9] = IS_PRESSED(wm, WIIMOTE_BUTTON_TWO);
+    buttons[10] = IS_PRESSED(wm, WIIMOTE_BUTTON_HOME);
+    return buttons;
 }
 
-vector<float> WiimoteConnector::wiimoteIr() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
+vector<float> WiimoteConnector::wiimoteIr(int wiimote_index) {
+    // irDots has 11 elements: 4 pairs of (x,y) for dots, then cursor x, y, z
+    irDots.assign(11, 0.0f); // Reset all IR data to 0
 
-	if (WIIUSE_USING_IR(wm)) {
-		int i = 0;
-		int ir = 0;
-		/* go through each of the 4 possible IR sources */
-		for (; i < 4; ++i) {
-			/* check if the source is visible */
-			if (wm->ir.dot[i].visible) {
-				irDots[ir] = wm->ir.dot[i].x;
-				irDots[ir+1] = wm->ir.dot[i].y;
-				
-			//	printf("IR source %i: (%u, %u)\n", i, wm->ir.dot[i].x, wm->ir.dot[i].y);
-			}
-			else {
-				irDots[ir] = 0;
-				irDots[ir + 1] = 0;
-			}
-			ir = ir + 2;
-		}
-		irDots[8] = wm->ir.x;
-		irDots[9] = wm->ir.y;
-		irDots[10] = wm->ir.z;
-//		printf("IR cursor: (%u, %u)\n", wm->ir.x, wm->ir.y);
-//		printf("IR z distance: %f\n", wm->ir.z);
-	}
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return irDots; // Return zeroed vector
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
 
-
-	return irDots;
+    if (WIIUSE_USING_IR(wm)) {
+        int dot_idx = 0;
+        for (int i = 0; i < 4; ++i) { // Max 4 IR dots
+            if (wm->ir.dot[i].visible) {
+                irDots[dot_idx++] = static_cast<float>(wm->ir.dot[i].x);
+                irDots[dot_idx++] = static_cast<float>(wm->ir.dot[i].y);
+            } else {
+                irDots[dot_idx++] = 0.0f; // x
+                irDots[dot_idx++] = 0.0f; // y
+            }
+        }
+        irDots[8] = static_cast<float>(wm->ir.x);
+        irDots[9] = static_cast<float>(wm->ir.y);
+        irDots[10] = wm->ir.z; // This is a float
+    }
+    return irDots;
 }
 
-
-bool WiimoteConnector::nunchuckOn() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-	if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
-		_nunStatus = "Connected";
-		return true;
-	}
-	else {
-		_nunStatus = "Disconnected";
-		return false;
-	}
+bool WiimoteConnector::nunchuckOn(int wiimote_index) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        // Update _nunStatus for this index if we had per-wiimote _nunStatus
+        return false;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        // _nunStatus = "Connected"; // This was global, needs to be per-wiimote or handled by caller
+        return true;
+    } else {
+        // _nunStatus = "Disconnected";
+        return false;
+    }
 }
 
-orient_t WiimoteConnector::nunchuckAcc() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
-
-		struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
-
-
-		return nc->orient;
-	}
-	else {
-		return wm->orient;
-	}
-
+orient_t WiimoteConnector::nunchuckAcc(int wiimote_index) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Default orientation
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
+        return nc->orient;
+    } else {
+        // No nunchuk, or not the right type. Return default or Wiimote's own orientation?
+        // The original returned wm->orient, implying Wiimote's orientation if no nunchuk.
+        // For clarity, perhaps return a zeroed/default if no nunchuk.
+        // However, to match original behavior if that was intended:
+        // return wm->orient; 
+        return {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}; // Or a specific "no nunchuk" orientation
+    }
 }
 
-vector<int> WiimoteConnector::nunchuckButtons() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
+vector<int> WiimoteConnector::nunchuckButtons(int wiimote_index) {
+    nunButtons.assign(2, 0); // Reset Nunchuk buttons
 
-	if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
-		struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
-		nunButtons[0] = (IS_PRESSED(nc, NUNCHUK_BUTTON_C));
-		nunButtons[1] = (IS_PRESSED(nc, NUNCHUK_BUTTON_Z));
-	}
-
-	return nunButtons;
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return nunButtons;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
+        nunButtons[0] = (IS_PRESSED(nc, NUNCHUK_BUTTON_C)) ? 1 : 0;
+        nunButtons[1] = (IS_PRESSED(nc, NUNCHUK_BUTTON_Z)) ? 1 : 0;
+    }
+    return nunButtons;
 }
 
-vector<float> WiimoteConnector::nunchuckJoystick() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
+vector<float> WiimoteConnector::nunchuckJoystick(int wiimote_index) {
+    nunJoystick.assign(2, 0.0f); // Reset Nunchuk joystick
 
-	if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
-		struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
-		nunJoystick[0] = nc->js.x;
-		nunJoystick[1] = nc->js.y;	
-	}
-	return nunJoystick;
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return nunJoystick;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_NUNCHUK || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        struct nunchuk_t* nc = (nunchuk_t*)&wm->exp.nunchuk;
+        nunJoystick[0] = nc->js.x; // These are usually floats or calibrated values
+        nunJoystick[1] = nc->js.y;
+    }
+    return nunJoystick;
 }
 
+vector<float> WiimoteConnector::getWiimoteGyro(int wiimote_index) {
+    gyro.assign(3, 0.0f); // Reset gyro data (pitch, roll, yaw)
 
-vector<float> WiimoteConnector::getWiimoteGyro() {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	
-	if (wm->exp.type == EXP_MOTION_PLUS ||
-		wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
-			gyro[0] = wm->exp.mp.angle_rate_gyro.pitch;
-			gyro[1] = wm->exp.mp.angle_rate_gyro.roll;
-			gyro[2] = wm->exp.mp.angle_rate_gyro.yaw;
-
-			printf("Motion+ angular rates (deg/sec): pitch:%03.2f roll:%03.2f yaw:%03.2f\n",
-				wm->exp.mp.angle_rate_gyro.pitch,
-				wm->exp.mp.angle_rate_gyro.roll,
-				wm->exp.mp.angle_rate_gyro.yaw);
-	}
-	return gyro;
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return gyro;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    if (wm->exp.type == EXP_MOTION_PLUS || wm->exp.type == EXP_MOTION_PLUS_NUNCHUK) {
+        gyro[0] = wm->exp.mp.angle_rate_gyro.pitch;
+        gyro[1] = wm->exp.mp.angle_rate_gyro.roll;
+        gyro[2] = wm->exp.mp.angle_rate_gyro.yaw;
+        // The printf for debugging can be kept if useful, or removed for production
+        // printf("Motion+ angular rates (deg/sec) for Wiimote %d: pitch:%03.2f roll:%03.2f yaw:%03.2f\n",
+        //	wm->unid, gyro[0], gyro[1], gyro[2]);
+    }
+    return gyro;
 }
 
-float WiimoteConnector::wiiBattery() {
-
-	float battery = 0;
-	if (_isConnected) {
-		struct wiimote_t* wm;
-		wm = _wiimotes[0];
-
-		battery = wm->battery_level;
-
-	}
-	return battery;
+float WiimoteConnector::wiiBattery(int wiimote_index) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return 0.0f; // Default battery level (or -1 to indicate error)
+    }
+    // _isConnected check is implicitly handled by WIIMOTE_IS_CONNECTED for the specific index
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    return wm->battery_level; // This is a float from 0.0 to 1.0
 }
 
-
-void WiimoteConnector::wiiRumble(int rumble) {
-	struct wiimote_t* wm;
-	wm = _wiimotes[0];
-
-	//wiiuse_toggle_rumble(wm);
-	wiiuse_rumble(_wiimotes[0], rumble);
-
-
+void WiimoteConnector::wiiRumble(int wiimote_index, int rumble) {
+    if (wiimote_index < 0 || wiimote_index >= MAX_WIIMOTES || !_wiimotes || !_wiimotes[wiimote_index] || !WIIMOTE_IS_CONNECTED(_wiimotes[wiimote_index])) {
+        return;
+    }
+    struct wiimote_t* wm = _wiimotes[wiimote_index];
+    wiiuse_rumble(wm, rumble ? 1 : 0); // Ensure rumble is 0 or 1
 }

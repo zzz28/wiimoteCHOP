@@ -1,7 +1,7 @@
 #ifndef WIIMOTE_H
 #define WIIMOTE_H
 
-#define MAX_WIIMOTES				1
+#define MAX_WIIMOTES				2
 #define MAX_BUTTONS					11
 
 #include <thread>
@@ -20,34 +20,35 @@ public:
 	void update();
 	void connect();
 	void disconnect();
-	void wiiThread(int id);
-	void acelerometer(bool accToggle);
-	void gyroscope(bool accToggle);
-	void irTracking(bool irToggle);
-	void wiiRumble(int rumble);
-	vector<int> wiimoteButtons();
-	vector<float> wiimoteIr();
-	vector<int> nunchuckButtons();
-	vector<float> nunchuckJoystick();
-	vector<float> getWiimoteGyro();
-	float wiiBattery();
+	void wiiThread(int id); // id parameter might be re-evaluated based on thread management for multiple wiimotes
+	void acelerometer(int wiimote_index, bool accToggle);
+	void gyroscope(int wiimote_index, bool gyroToggle);
+	void irTracking(int wiimote_index, bool irToggle);
+	void wiiRumble(int wiimote_index, int rumble);
+	vector<int> wiimoteButtons(int wiimote_index);
+	vector<float> wiimoteIr(int wiimote_index);
+	vector<int> nunchuckButtons(int wiimote_index);
+	vector<float> nunchuckJoystick(int wiimote_index);
+	vector<float> getWiimoteGyro(int wiimote_index);
+	float wiiBattery(int wiimote_index);
 
-	int wiimoteButton_A();
+	int wiimoteButton_A(int wiimote_index);
 
-	orient_t getWiimoteOrient();
-	orient_t nunchuckAcc();
+	orient_t getWiimoteOrient(int wiimote_index);
+	orient_t nunchuckAcc(int wiimote_index);
 
-	bool nunchuckOn();
+	bool nunchuckOn(int wiimote_index);
 
 	std::thread _wiimoteThread;
 
 	std::string getCurrentStatus();
-	std::string getNunchuckStatus();
-	std::string getCurrentWiimote();
+	std::string getNunchuckStatus(int wiimote_index); // Changed
+	std::string getCurrentWiimote(); // Reports for first found, or consider adding getWiimoteID(int index)
+	std::string getWiimoteID(int wiimote_index); // Added
 	
 
 private:
-	void initializeWiimote();
+	void initializeWiimote(); // This can remain as is, or be removed if not used.
 
 	short any_wiimote_connected(wiimote** wm, int wiimotes);
 	void handle_event(struct wiimote_t* wm);

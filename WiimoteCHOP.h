@@ -11,7 +11,7 @@
 #include "CHOP_CPlusPlusBase.h"
 #include "WiimoteConnector.h"
 
-#define NUM_CHANNELS				35
+#define NUM_CHANNELS				70
 /*
 
 This example file implements a class that does 2 different things depending on
